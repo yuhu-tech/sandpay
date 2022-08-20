@@ -90,7 +90,7 @@ func (c *client) Verify(result []byte) (X, error) {
 	ret := gjson.Get(v.Get("data"), "head")
 
 	if respCode := ret.Get("respCode").String(); respCode != OK {
-		return nil, fmt.Errorf("[err] %s | %s", respCode, ret.Get("respMsg").String())
+		return nil, fmt.Errorf("sandpay: %s | %s", respCode, ret.Get("respMsg").String())
 	}
 
 	data := new(Data)
@@ -187,7 +187,7 @@ func (c *client) Realname(ctx context.Context, reqURL, transCode string, data X)
 	ret := gjson.ParseBytes(b)
 
 	if respCode := ret.Get("respCode").String(); respCode != "0000" {
-		return nil, fmt.Errorf("[err] %s | %s", respCode, ret.Get("respDesc").String())
+		return nil, fmt.Errorf("sandpay: %s | %s", respCode, ret.Get("respDesc").String())
 	}
 
 	var result X
