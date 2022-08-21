@@ -19,8 +19,10 @@ import (
 type Client interface {
 	// Do 请求杉德API
 	Do(ctx context.Context, reqURL string, form url.Values) (X, error)
+
 	// Form 生成统一的POST表单（用于API请求或前端表单提交）
 	Form(method, productID string, body X) (url.Values, error)
+
 	// Verify 验证并解析杉德API结果或回调通知
 	Verify(result []byte) (X, error)
 }
