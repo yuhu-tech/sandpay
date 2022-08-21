@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -16,15 +17,16 @@ import (
 )
 
 type Client interface {
+	// Do 请求杉德API
 	Do(ctx context.Context, reqURL string, form url.Values) (X, error)
+	// Form 生成统一的POST表单（用于API请求或前端表单提交）
 	Form(method, productID string, body X) (url.Values, error)
+	// Verify 验证并解析杉德API结果或回调通知
 	Verify(result []byte) (X, error)
-	Realname(ctx context.Context, reqURL, transCode string, data X) (X, error)
 }
 
 type client struct {
 	mid    string
-	aesKey string
 	prvKey *PrivateKey
 	pubKey *PublicKey
 	cli    HTTPClient
@@ -77,20 +79,32 @@ func (c *client) Form(method, productID string, body X) (url.Values, error) {
 }
 
 func (c *client) Verify(result []byte) (X, error) {
-	v, err := url.ParseQuery(string(result))
+	form, err := url.QueryUnescape(string(result))
+
+	if err != nil {
+		return nil, errors.Wrap(err, "unescape resp body")
+	}
+
+	v, err := url.ParseQuery(string(form))
 
 	if err != nil {
 		return nil, errors.Wrap(err, "parse resp body")
 	}
 
-	if err = c.pubKey.Verify(crypto.SHA1, []byte(v.Get("data")), []byte(v.Get("sign"))); err != nil {
+	sign, err := base64.StdEncoding.DecodeString(strings.Replace(v.Get("sign"), " ", "+", -1))
+
+	if err != nil {
+		return nil, errors.Wrap(err, "base64 decode resp sign")
+	}
+
+	if err = c.pubKey.Verify(crypto.SHA1, []byte(v.Get("data")), sign); err != nil {
 		return nil, errors.Wrap(err, "verify resp sign")
 	}
 
 	ret := gjson.Get(v.Get("data"), "head")
 
 	if respCode := ret.Get("respCode").String(); respCode != OK {
-		return nil, fmt.Errorf("sandpay: %s | %s", respCode, ret.Get("respMsg").String())
+		return nil, fmt.Errorf("[sandpay] %s | %s", respCode, ret.Get("respMsg").String())
 	}
 
 	data := new(Data)
@@ -100,103 +114,6 @@ func (c *client) Verify(result []byte) (X, error) {
 	}
 
 	return data.Body, nil
-}
-
-func (c *client) Realname(ctx context.Context, reqURL, transCode string, data X) (X, error) {
-	encryptKey, err := c.pubKey.Encrypt([]byte(c.aesKey))
-
-	if err != nil {
-		return nil, errors.Wrap(err, "encrypt req aesKey")
-	}
-
-	b, err := json.Marshal(data)
-
-	if err != nil {
-		return nil, errors.Wrap(err, "marshal req data")
-	}
-
-	encryptData, err := NewECBCrypto([]byte(c.aesKey), PKCS5).Encrypt(b)
-
-	if err != nil {
-		return nil, errors.Wrap(err, "encrypt req data")
-	}
-
-	sign, err := c.prvKey.Sign(crypto.SHA1, b)
-
-	if err != nil {
-		return nil, errors.Wrap(err, "build req sign")
-	}
-
-	form := url.Values{}
-
-	form.Set("transCode", transCode)
-	form.Set("accessType", "0")
-	form.Set("merId", c.mid)
-	form.Set("encryptKey", base64.StdEncoding.EncodeToString(encryptKey))
-	form.Set("encryptData", base64.StdEncoding.EncodeToString(encryptData))
-	form.Set("sign", base64.StdEncoding.EncodeToString(sign))
-
-	resp, err := c.cli.Do(ctx, http.MethodPost, reqURL, []byte(form.Encode()), WithHTTPHeader("Content-Type", "application/x-www-form-urlencoded"))
-
-	if err != nil {
-		return nil, errors.Wrap(err, "do http request")
-	}
-
-	defer resp.Body.Close()
-
-	b, err = ioutil.ReadAll(resp.Body)
-
-	if err != nil {
-		return nil, errors.Wrap(err, "read resp body")
-	}
-
-	v, err := url.ParseQuery(string(b))
-
-	if err != nil {
-		return nil, errors.Wrap(err, "parse resp body")
-	}
-
-	b, err = base64.StdEncoding.DecodeString(v.Get("encryptKey"))
-
-	if err != nil {
-		return nil, errors.Wrap(err, "base64 decode resp encryptKey")
-	}
-
-	respKey, err := c.prvKey.Decrypt([]byte(b))
-
-	if err != nil {
-		return nil, errors.Wrap(err, "decrypt resp aseKey")
-	}
-
-	b, err = base64.StdEncoding.DecodeString(v.Get("encryptData"))
-
-	if err != nil {
-		return nil, errors.Wrap(err, "base64 decode resp encryptData")
-	}
-
-	b, err = NewECBCrypto(respKey, PKCS5).Decrypt(b)
-
-	if err != nil {
-		return nil, errors.Wrap(err, "decrypt resp data")
-	}
-
-	if err = c.pubKey.Verify(crypto.SHA1, b, []byte(v.Get("sign"))); err != nil {
-		return nil, errors.Wrap(err, "verify resp sign")
-	}
-
-	ret := gjson.ParseBytes(b)
-
-	if respCode := ret.Get("respCode").String(); respCode != "0000" {
-		return nil, fmt.Errorf("sandpay: %s | %s", respCode, ret.Get("respDesc").String())
-	}
-
-	var result X
-
-	if err := json.Unmarshal(b, &result); err != nil {
-		return nil, errors.Wrap(err, "unmarshal resp data")
-	}
-
-	return result, nil
 }
 
 func (c *client) header(method, productID string) X {
@@ -213,12 +130,6 @@ func (c *client) header(method, productID string) X {
 
 type ClientOption func(c *client)
 
-func WithAESKey(aesKey string) ClientOption {
-	return func(c *client) {
-		c.aesKey = aesKey
-	}
-}
-
 func WithHTTPClient(cli *http.Client) ClientOption {
 	return func(c *client) {
 		c.cli = NewHTTPClient(cli)
@@ -227,19 +138,18 @@ func WithHTTPClient(cli *http.Client) ClientOption {
 
 type Config struct {
 	MID      string
-	PfxCert  string
-	PfxPwd   string
-	SandCert string
+	KeyFile  string // PEM格式（商户私钥）
+	CertFile string // PEM格式（杉德公钥）
 }
 
 func NewClient(cfg *Config, options ...ClientOption) (Client, error) {
-	prvKey, err := ParsePrivateKeyFromPfxFile(cfg.PfxCert, cfg.PfxPwd)
+	prvKey, err := NewPrivateKeyFromPemFile(cfg.KeyFile)
 
 	if err != nil {
 		return nil, err
 	}
 
-	pubKey, err := ParsePublicKeyFromDerFile(cfg.SandCert)
+	pubKey, err := NewPublicKeyFromDerFile(cfg.CertFile)
 
 	if err != nil {
 		return nil, err
@@ -247,7 +157,6 @@ func NewClient(cfg *Config, options ...ClientOption) (Client, error) {
 
 	c := &client{
 		mid:    cfg.MID,
-		aesKey: MD5(cfg.MID),
 		prvKey: prvKey,
 		pubKey: pubKey,
 		cli:    NewDefaultHTTPClient(),
