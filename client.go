@@ -16,6 +16,7 @@ import (
 	"github.com/tidwall/gjson"
 )
 
+// Client 杉德支付client
 type Client interface {
 	// Do 请求杉德API
 	Do(ctx context.Context, reqURL string, form url.Values) (X, error)
