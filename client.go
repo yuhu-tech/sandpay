@@ -5,7 +5,6 @@ import (
 	"crypto"
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -13,19 +12,18 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/tidwall/gjson"
 )
 
 // Client 杉德支付客户端
 type Client interface {
 	// Do 请求杉德API
-	Do(ctx context.Context, reqURL string, form url.Values) (X, error)
+	Do(ctx context.Context, reqURL string, form url.Values) (*Data, error)
 
 	// Form 生成统一的POST表单（用于API请求或前端表单提交）
 	Form(method, productID string, body X, options ...HeadOption) (url.Values, error)
 
 	// Verify 验证并解析杉德API结果或回调通知
-	Verify(result []byte) (X, error)
+	Verify(result []byte) (*Data, error)
 }
 
 type client struct {
@@ -35,7 +33,7 @@ type client struct {
 	cli    HTTPClient
 }
 
-func (c *client) Do(ctx context.Context, reqURL string, form url.Values) (X, error) {
+func (c *client) Do(ctx context.Context, reqURL string, form url.Values) (*Data, error) {
 	resp, err := c.cli.Do(ctx, http.MethodPost, reqURL, []byte(form.Encode()), WithHTTPHeader("Content-Type", "application/x-www-form-urlencoded"))
 
 	if err != nil {
@@ -81,7 +79,7 @@ func (c *client) Form(method, productID string, body X, options ...HeadOption) (
 	return form, nil
 }
 
-func (c *client) Verify(result []byte) (X, error) {
+func (c *client) Verify(result []byte) (*Data, error) {
 	form, err := url.QueryUnescape(string(result))
 
 	if err != nil {
@@ -104,19 +102,13 @@ func (c *client) Verify(result []byte) (X, error) {
 		return nil, errors.Wrap(err, "verify resp sign")
 	}
 
-	ret := gjson.Get(v.Get("data"), "head")
-
-	if respCode := ret.Get("respCode").String(); respCode != OK {
-		return nil, fmt.Errorf("[sandpay] %s | %s", respCode, ret.Get("respMsg").String())
-	}
-
 	data := new(Data)
 
 	if err := json.Unmarshal([]byte(v.Get("data")), data); err != nil {
 		return nil, errors.Wrap(err, "unmarshal resp data")
 	}
 
-	return data.Body, nil
+	return data, nil
 }
 
 func (c *client) head(method, productID string, options ...HeadOption) X {
@@ -166,7 +158,7 @@ func WithHTTPClient(cli *http.Client) ClientOption {
 
 // Config 客户端配置
 type Config struct {
-	MID      string
+	MID      string // 商户ID
 	KeyFile  string // PEM格式（商户私钥）
 	CertFile string // PEM格式（杉德公钥）
 }
