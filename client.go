@@ -23,7 +23,7 @@ type Client interface {
 	Form(method, productID string, body X) (url.Values, error)
 
 	// Verify 验证并解析杉德API结果或回调通知
-	Verify(result []byte) (*Data, error)
+	Verify(form url.Values) (*Data, error)
 }
 
 type client struct {
@@ -48,7 +48,19 @@ func (c *client) Do(ctx context.Context, reqURL string, form url.Values) (*Data,
 		return nil, errors.Wrap(err, "read resp body")
 	}
 
-	return c.Verify(b)
+	query, err := url.QueryUnescape(string(b))
+
+	if err != nil {
+		return nil, errors.Wrap(err, "unescape resp body")
+	}
+
+	v, err := url.ParseQuery(query)
+
+	if err != nil {
+		return nil, errors.Wrap(err, "parse resp body")
+	}
+
+	return c.Verify(v)
 }
 
 func (c *client) Form(method, productID string, body X) (url.Values, error) {
@@ -60,13 +72,13 @@ func (c *client) Form(method, productID string, body X) (url.Values, error) {
 	b, err := json.Marshal(data)
 
 	if err != nil {
-		return nil, errors.Wrap(err, "marshal req data")
+		return nil, errors.Wrap(err, "marshal form data")
 	}
 
 	sign, err := c.prvKey.Sign(crypto.SHA1, b)
 
 	if err != nil {
-		return nil, errors.Wrap(err, "build req sign")
+		return nil, errors.Wrap(err, "build form sign")
 	}
 
 	form := url.Values{}
@@ -79,33 +91,21 @@ func (c *client) Form(method, productID string, body X) (url.Values, error) {
 	return form, nil
 }
 
-func (c *client) Verify(result []byte) (*Data, error) {
-	form, err := url.QueryUnescape(string(result))
+func (c *client) Verify(form url.Values) (*Data, error) {
+	sign, err := base64.StdEncoding.DecodeString(strings.Replace(form.Get("sign"), " ", "+", -1))
 
 	if err != nil {
-		return nil, errors.Wrap(err, "unescape resp body")
+		return nil, errors.Wrap(err, "base64 decode form sign")
 	}
 
-	v, err := url.ParseQuery(string(form))
-
-	if err != nil {
-		return nil, errors.Wrap(err, "parse resp body")
-	}
-
-	sign, err := base64.StdEncoding.DecodeString(strings.Replace(v.Get("sign"), " ", "+", -1))
-
-	if err != nil {
-		return nil, errors.Wrap(err, "base64 decode resp sign")
-	}
-
-	if err = c.pubKey.Verify(crypto.SHA1, []byte(v.Get("data")), sign); err != nil {
-		return nil, errors.Wrap(err, "verify resp sign")
+	if err = c.pubKey.Verify(crypto.SHA1, []byte(form.Get("data")), sign); err != nil {
+		return nil, errors.Wrap(err, "verify form sign")
 	}
 
 	data := new(Data)
 
-	if err := json.Unmarshal([]byte(v.Get("data")), data); err != nil {
-		return nil, errors.Wrap(err, "unmarshal resp data")
+	if err := json.Unmarshal([]byte(form.Get("data")), data); err != nil {
+		return nil, errors.Wrap(err, "unmarshal form data")
 	}
 
 	return data, nil
