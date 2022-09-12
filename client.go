@@ -3,9 +3,11 @@ package sandpay
 import (
 	"context"
 	"crypto"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -28,13 +30,28 @@ type client struct {
 	mid    string
 	prvKey *PrivateKey
 	pubKey *PublicKey
-	cli    HTTPClient
+	cli    *http.Client
 }
 
 func (c *client) Do(ctx context.Context, reqURL string, form url.Values) (*Data, error) {
-	resp, err := c.cli.Do(ctx, http.MethodPost, reqURL, []byte(form.Encode()))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL, strings.NewReader(form.Encode()))
 
 	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := c.cli.Do(req)
+
+	if err != nil {
+		// If the context has been canceled, the context's error is probably more useful.
+		select {
+		case <-ctx.Done():
+			err = ctx.Err()
+		default:
+		}
+
 		return nil, err
 	}
 
@@ -127,52 +144,11 @@ func (c *client) head(method, productID string, options ...HeadOption) X {
 	return head
 }
 
-// HeadOption 报文头配置项
-type HeadOption func(h X)
-
-// WithVersion 设置版本号：默认：1.0；功能产品号为微信小程序或支付宝生活号，对账单需获取营销优惠金额字段传：3.0
-func WithVersion(v string) HeadOption {
-	return func(h X) {
-		h["version"] = v
-	}
-}
-
-// WithPLMid 设置平台ID：接入类型为2时必填，在担保支付模式下填写核心商户号；在杉德宝平台终端模式下填写平台商户号
-func WithPLMid(id string) HeadOption {
-	return func(h X) {
-		h["plMid"] = id
-	}
-}
-
-// WithAccessType 设置接入类型：1 - 普通商户接入（默认）；2 - 平台商户接入
-func WithAccessType(at string) HeadOption {
-	return func(h X) {
-		h["accessType"] = at
-	}
-}
-
-// WithChannelType 设置渠道类型：07 - 互联网（默认）；08 - 移动端
-func WithChannelType(ct string) HeadOption {
-	return func(h X) {
-		h["channelType"] = ct
-	}
-}
-
-// ClientOption 客户端配置项
-type ClientOption func(c *client)
-
-// WithHTTPClient 自定义http.Client
-func WithHTTPClient(cli *http.Client) ClientOption {
-	return func(c *client) {
-		c.cli = NewHTTPClient(cli)
-	}
-}
-
 // Config 客户端配置
 type Config struct {
 	MID      string // 商户ID
-	KeyFile  string // PEM格式（商户私钥）
-	CertFile string // PEM格式（杉德公钥）
+	KeyFile  string // 商户私钥（PEM格式）
+	CertFile string // 杉德公钥（PEM格式）
 }
 
 func NewClient(cfg *Config, options ...ClientOption) (Client, error) {
@@ -192,7 +168,24 @@ func NewClient(cfg *Config, options ...ClientOption) (Client, error) {
 		mid:    cfg.MID,
 		prvKey: prvKey,
 		pubKey: pubKey,
-		cli:    NewDefaultHTTPClient(),
+		cli: &http.Client{
+			Transport: &http.Transport{
+				Proxy: http.ProxyFromEnvironment,
+				DialContext: (&net.Dialer{
+					Timeout:   30 * time.Second,
+					KeepAlive: 60 * time.Second,
+				}).DialContext,
+				TLSClientConfig: &tls.Config{
+					InsecureSkipVerify: true,
+				},
+				MaxIdleConns:          0,
+				MaxIdleConnsPerHost:   1000,
+				MaxConnsPerHost:       1000,
+				IdleConnTimeout:       60 * time.Second,
+				TLSHandshakeTimeout:   10 * time.Second,
+				ExpectContinueTimeout: 1 * time.Second,
+			},
+		},
 	}
 
 	for _, f := range options {
