@@ -10,8 +10,6 @@ import (
 	"net/url"
 	"strings"
 	"time"
-
-	"github.com/pkg/errors"
 )
 
 // Client 杉德支付客户端
@@ -34,10 +32,10 @@ type client struct {
 }
 
 func (c *client) Do(ctx context.Context, reqURL string, form url.Values) (*Data, error) {
-	resp, err := c.cli.Do(ctx, http.MethodPost, reqURL, []byte(form.Encode()), WithHTTPHeader("Content-Type", "application/x-www-form-urlencoded"))
+	resp, err := c.cli.Do(ctx, http.MethodPost, reqURL, []byte(form.Encode()))
 
 	if err != nil {
-		return nil, errors.Wrap(err, "do http request")
+		return nil, err
 	}
 
 	defer resp.Body.Close()
@@ -45,19 +43,19 @@ func (c *client) Do(ctx context.Context, reqURL string, form url.Values) (*Data,
 	b, err := ioutil.ReadAll(resp.Body)
 
 	if err != nil {
-		return nil, errors.Wrap(err, "read resp body")
+		return nil, err
 	}
 
 	query, err := url.QueryUnescape(string(b))
 
 	if err != nil {
-		return nil, errors.Wrap(err, "unescape resp body")
+		return nil, err
 	}
 
 	v, err := url.ParseQuery(query)
 
 	if err != nil {
-		return nil, errors.Wrap(err, "parse resp body")
+		return nil, err
 	}
 
 	return c.Verify(v)
@@ -72,13 +70,13 @@ func (c *client) Form(method, productID string, body X, options ...HeadOption) (
 	b, err := json.Marshal(data)
 
 	if err != nil {
-		return nil, errors.Wrap(err, "marshal form data")
+		return nil, err
 	}
 
 	sign, err := c.prvKey.Sign(crypto.SHA1, b)
 
 	if err != nil {
-		return nil, errors.Wrap(err, "build form sign")
+		return nil, err
 	}
 
 	form := url.Values{}
@@ -95,17 +93,17 @@ func (c *client) Verify(form url.Values) (*Data, error) {
 	sign, err := base64.StdEncoding.DecodeString(strings.Replace(form.Get("sign"), " ", "+", -1))
 
 	if err != nil {
-		return nil, errors.Wrap(err, "base64 decode form sign")
+		return nil, err
 	}
 
 	if err = c.pubKey.Verify(crypto.SHA1, []byte(form.Get("data")), sign); err != nil {
-		return nil, errors.Wrap(err, "verify form sign")
+		return nil, err
 	}
 
 	data := new(Data)
 
 	if err := json.Unmarshal([]byte(form.Get("data")), data); err != nil {
-		return nil, errors.Wrap(err, "unmarshal form data")
+		return nil, err
 	}
 
 	return data, nil
