@@ -84,7 +84,7 @@ func (c *client) Form(method, productID string, body X, options ...HeadOption) (
 		Body: body,
 	}
 
-	b, err := json.Marshal(data)
+	b, err := MarshalNoEscapeHTML(data)
 
 	if err != nil {
 		return nil, err

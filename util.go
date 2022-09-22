@@ -1,10 +1,12 @@
 package sandpay
 
 import (
+	"bytes"
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -146,4 +148,26 @@ func NewPublicKeyFromDerFile(pemFile string) (*PublicKey, error) {
 	}
 
 	return &PublicKey{key: cert.PublicKey.(*rsa.PublicKey)}, nil
+}
+
+// MarshalNoEscapeHTML marshal with no escape HTML
+func MarshalNoEscapeHTML(v interface{}) ([]byte, error) {
+	buf := bytes.NewBuffer(nil)
+
+	jsonEncoder := json.NewEncoder(buf)
+	jsonEncoder.SetEscapeHTML(false)
+
+	if err := jsonEncoder.Encode(v); err != nil {
+		return nil, err
+	}
+
+	b := buf.Bytes()
+
+	// 去掉 go std 给末尾加的 '\n'
+	// @see https://github.com/golang/go/issues/7767
+	if l := len(b); l != 0 && b[l-1] == '\n' {
+		b = b[:l-1]
+	}
+
+	return b, nil
 }
