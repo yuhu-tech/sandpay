@@ -148,11 +148,12 @@ func (c *client) head(method, productID string, options ...HeadOption) X {
 type Config struct {
 	MID      string // 商户ID
 	KeyFile  string // 商户私钥（PEM格式）
+	KeyMode  RSAPaddingMode
 	CertFile string // 杉德公钥（PEM格式）
 }
 
 func NewClient(cfg *Config, options ...ClientOption) (Client, error) {
-	prvKey, err := NewPrivateKeyFromPemFile(cfg.KeyFile)
+	prvKey, err := NewPrivateKeyFromPemFile(cfg.KeyMode, cfg.KeyFile)
 
 	if err != nil {
 		return nil, err

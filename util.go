@@ -10,7 +10,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 )
 
@@ -23,14 +23,14 @@ type Data struct {
 	Body X `json:"body"`
 }
 
-// PemBlockType pem block type which taken from the preamble.
-type PemBlockType string
+// RSAPaddingMode pem block type which taken from the preamble.
+type RSAPaddingMode int
 
 const (
-	// RSAPKCS1 private key in PKCS#1
-	RSAPKCS1 PemBlockType = "RSA PRIVATE KEY"
-	// RSAPKCS8 private key in PKCS#8
-	RSAPKCS8 PemBlockType = "PRIVATE KEY"
+	// RSA_PKCS1 this kind of key is commonly encoded in PEM blocks of type "RSA PRIVATE KEY" and "RSA PUBLIC KEY"
+	RSA_PKCS1 RSAPaddingMode = iota
+	// RSA_PKCS8 this kind of key is commonly encoded in PEM blocks of type "PRIVATE KEY" and "PUBLIC KEY"
+	RSA_PKCS8
 )
 
 // PrivateKey RSA private key
@@ -61,32 +61,23 @@ func (pk *PrivateKey) Sign(hash crypto.Hash, data []byte) ([]byte, error) {
 	return signature, nil
 }
 
-// NewPrivateKeyFromPemFile returns new private key with pem file.
-func NewPrivateKeyFromPemFile(pemFile string) (*PrivateKey, error) {
-	keyPath, err := filepath.Abs(pemFile)
-
-	if err != nil {
-		return nil, err
-	}
-
-	b, err := ioutil.ReadFile(keyPath)
-
-	if err != nil {
-		return nil, err
-	}
-
-	block, _ := pem.Decode(b)
+// NewPrivateKeyFromPemBlock returns new private key with pem block.
+func NewPrivateKeyFromPemBlock(mode RSAPaddingMode, pemBlock []byte) (*PrivateKey, error) {
+	block, _ := pem.Decode(pemBlock)
 
 	if block == nil {
 		return nil, errors.New("no PEM data is found")
 	}
 
-	var pk interface{}
+	var (
+		pk  interface{}
+		err error
+	)
 
-	switch PemBlockType(block.Type) {
-	case RSAPKCS1:
+	switch mode {
+	case RSA_PKCS1:
 		pk, err = x509.ParsePKCS1PrivateKey(block.Bytes)
-	case RSAPKCS8:
+	case RSA_PKCS8:
 		pk, err = x509.ParsePKCS8PrivateKey(block.Bytes)
 	}
 
@@ -95,6 +86,23 @@ func NewPrivateKeyFromPemFile(pemFile string) (*PrivateKey, error) {
 	}
 
 	return &PrivateKey{key: pk.(*rsa.PrivateKey)}, nil
+}
+
+// NewPrivateKeyFromPemFile returns new private key with pem file.
+func NewPrivateKeyFromPemFile(mode RSAPaddingMode, pemFile string) (*PrivateKey, error) {
+	keyPath, err := filepath.Abs(pemFile)
+
+	if err != nil {
+		return nil, err
+	}
+
+	b, err := os.ReadFile(keyPath)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return NewPrivateKeyFromPemBlock(mode, b)
 }
 
 // PublicKey RSA public key
@@ -119,23 +127,55 @@ func (pk *PublicKey) Verify(hash crypto.Hash, data, signature []byte) error {
 	return rsa.VerifyPKCS1v15(pk.key, hash, h.Sum(nil), signature)
 }
 
-// NewPublicKeyFromDerFile returns public key with DER file.
-// NOTE: PEM format with -----BEGIN CERTIFICATE----- | -----END CERTIFICATE-----
-// openssl x509 -inform der -in cert.cer -out cert.pem
-func NewPublicKeyFromDerFile(pemFile string) (*PublicKey, error) {
+// NewPublicKeyFromPemBlock returns new public key with pem block.
+func NewPublicKeyFromPemBlock(mode RSAPaddingMode, pemBlock []byte) (*PublicKey, error) {
+	block, _ := pem.Decode(pemBlock)
+
+	if block == nil {
+		return nil, errors.New("no PEM data is found")
+	}
+
+	var (
+		pk  interface{}
+		err error
+	)
+
+	switch mode {
+	case RSA_PKCS1:
+		pk, err = x509.ParsePKCS1PublicKey(block.Bytes)
+	case RSA_PKCS8:
+		pk, err = x509.ParsePKIXPublicKey(block.Bytes)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &PublicKey{key: pk.(*rsa.PublicKey)}, nil
+}
+
+// NewPublicKeyFromPemFile returns new public key with pem file.
+func NewPublicKeyFromPemFile(mode RSAPaddingMode, pemFile string) (*PublicKey, error) {
 	keyPath, err := filepath.Abs(pemFile)
 
 	if err != nil {
 		return nil, err
 	}
 
-	b, err := ioutil.ReadFile(keyPath)
+	b, err := os.ReadFile(keyPath)
 
 	if err != nil {
 		return nil, err
 	}
 
-	block, _ := pem.Decode(b)
+	return NewPublicKeyFromPemBlock(mode, b)
+}
+
+// NewPublicKeyFromDerBlock returns public key with DER block.
+// NOTE: PEM format with -----BEGIN CERTIFICATE----- | -----END CERTIFICATE-----
+// CMD: openssl x509 -inform der -in cert.cer -out cert.pem
+func NewPublicKeyFromDerBlock(pemBlock []byte) (*PublicKey, error) {
+	block, _ := pem.Decode(pemBlock)
 
 	if block == nil {
 		return nil, errors.New("no PEM data is found")
@@ -148,6 +188,25 @@ func NewPublicKeyFromDerFile(pemFile string) (*PublicKey, error) {
 	}
 
 	return &PublicKey{key: cert.PublicKey.(*rsa.PublicKey)}, nil
+}
+
+// NewPublicKeyFromDerFile returns public key with DER file.
+// NOTE: PEM format with -----BEGIN CERTIFICATE----- | -----END CERTIFICATE-----
+// CMD: openssl x509 -inform der -in cert.cer -out cert.pem
+func NewPublicKeyFromDerFile(pemFile string) (*PublicKey, error) {
+	keyPath, err := filepath.Abs(pemFile)
+
+	if err != nil {
+		return nil, err
+	}
+
+	b, err := os.ReadFile(keyPath)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return NewPublicKeyFromDerBlock(b)
 }
 
 // MarshalNoEscapeHTML marshal with no escape HTML
