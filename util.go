@@ -10,8 +10,9 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"os"
+	"io/ioutil"
 	"path/filepath"
+	"strconv"
 )
 
 const OK = "000000"
@@ -46,7 +47,7 @@ func (pk *PrivateKey) Decrypt(cipherText []byte) ([]byte, error) {
 // Sign returns sha-with-rsa signature.
 func (pk *PrivateKey) Sign(hash crypto.Hash, data []byte) ([]byte, error) {
 	if !hash.Available() {
-		return nil, fmt.Errorf("crypto: requested hash function (%s) is unavailable", hash.String())
+		return nil, fmt.Errorf("crypto: requested hash function (%s) is unavailable", HashToString(hash))
 	}
 
 	h := hash.New()
@@ -96,7 +97,7 @@ func NewPrivateKeyFromPemFile(mode RSAPaddingMode, pemFile string) (*PrivateKey,
 		return nil, err
 	}
 
-	b, err := os.ReadFile(keyPath)
+	b, err := ioutil.ReadFile(keyPath)
 
 	if err != nil {
 		return nil, err
@@ -118,7 +119,7 @@ func (pk *PublicKey) Encrypt(plainText []byte) ([]byte, error) {
 // Verify verifies the sha-with-rsa signature.
 func (pk *PublicKey) Verify(hash crypto.Hash, data, signature []byte) error {
 	if !hash.Available() {
-		return fmt.Errorf("crypto: requested hash function (%s) is unavailable", hash.String())
+		return fmt.Errorf("crypto: requested hash function (%s) is unavailable", HashToString(hash))
 	}
 
 	h := hash.New()
@@ -162,7 +163,7 @@ func NewPublicKeyFromPemFile(mode RSAPaddingMode, pemFile string) (*PublicKey, e
 		return nil, err
 	}
 
-	b, err := os.ReadFile(keyPath)
+	b, err := ioutil.ReadFile(keyPath)
 
 	if err != nil {
 		return nil, err
@@ -200,7 +201,7 @@ func NewPublicKeyFromDerFile(pemFile string) (*PublicKey, error) {
 		return nil, err
 	}
 
-	b, err := os.ReadFile(keyPath)
+	b, err := ioutil.ReadFile(keyPath)
 
 	if err != nil {
 		return nil, err
@@ -229,4 +230,49 @@ func MarshalNoEscapeHTML(v interface{}) ([]byte, error) {
 	}
 
 	return b, nil
+}
+
+func HashToString(h crypto.Hash) string {
+	switch h {
+	case crypto.MD4:
+		return "MD4"
+	case crypto.MD5:
+		return "MD5"
+	case crypto.SHA1:
+		return "SHA-1"
+	case crypto.SHA224:
+		return "SHA-224"
+	case crypto.SHA256:
+		return "SHA-256"
+	case crypto.SHA384:
+		return "SHA-384"
+	case crypto.SHA512:
+		return "SHA-512"
+	case crypto.MD5SHA1:
+		return "MD5+SHA1"
+	case crypto.RIPEMD160:
+		return "RIPEMD-160"
+	case crypto.SHA3_224:
+		return "SHA3-224"
+	case crypto.SHA3_256:
+		return "SHA3-256"
+	case crypto.SHA3_384:
+		return "SHA3-384"
+	case crypto.SHA3_512:
+		return "SHA3-512"
+	case crypto.SHA512_224:
+		return "SHA-512/224"
+	case crypto.SHA512_256:
+		return "SHA-512/256"
+	case crypto.BLAKE2s_256:
+		return "BLAKE2s-256"
+	case crypto.BLAKE2b_256:
+		return "BLAKE2b-256"
+	case crypto.BLAKE2b_384:
+		return "BLAKE2b-384"
+	case crypto.BLAKE2b_512:
+		return "BLAKE2b-512"
+	default:
+		return "unknown hash value " + strconv.Itoa(int(h))
+	}
 }

@@ -1,3 +1,3 @@
-module github.com/shenghui0779/sandpay
+module github.com/yuhu-tech/sandpay
 
-go 1.17
+go 1.13
