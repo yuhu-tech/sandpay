@@ -1,4 +1,4 @@
-package sandpay
+package account
 
 import "net/http"
 

@@ -1,4 +1,4 @@
-package sandpay
+package account
 
 import (
 	"context"
@@ -12,28 +12,43 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/yuhu-tech/sandpay/util"
 )
+
+type Encoder interface {
+	Encode() string
+}
 
 // Client 杉德支付客户端
 type Client interface {
 	// Do 请求杉德API
-	Do(ctx context.Context, reqURL string, form url.Values) (*Data, error)
+	Do(ctx context.Context, reqURL string, form Encoder) (*Data, error)
 
 	// Form 生成统一的POST表单（用于API请求或前端表单提交）
-	Form(method, productID string, body X, options ...HeadOption) (url.Values, error)
+	Form(method, productID string, body X, options ...HeadOption) (Encoder, error)
 
 	// Verify 验证并解析杉德API结果或回调通知
 	Verify(form url.Values) (*Data, error)
 }
 
+const OK = "000000"
+
+type X map[string]string
+
+type Data struct {
+	Head X `json:"head"`
+	Body X `json:"body"`
+}
+
 type client struct {
 	mid    string
-	prvKey *PrivateKey
-	pubKey *PublicKey
+	prvKey *util.PrivateKey
+	pubKey *util.PublicKey
 	cli    *http.Client
 }
 
-func (c *client) Do(ctx context.Context, reqURL string, form url.Values) (*Data, error) {
+func (c *client) Do(ctx context.Context, reqURL string, form Encoder) (*Data, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL, strings.NewReader(form.Encode()))
 
 	if err != nil {
@@ -78,13 +93,13 @@ func (c *client) Do(ctx context.Context, reqURL string, form url.Values) (*Data,
 	return c.Verify(v)
 }
 
-func (c *client) Form(method, productID string, body X, options ...HeadOption) (url.Values, error) {
+func (c *client) Form(method, productID string, body X, options ...HeadOption) (Encoder, error) {
 	data := &Data{
 		Head: c.head(method, productID, options...),
 		Body: body,
 	}
 
-	b, err := MarshalNoEscapeHTML(data)
+	b, err := util.MarshalNoEscapeHTML(data)
 
 	if err != nil {
 		return nil, err
@@ -148,18 +163,18 @@ func (c *client) head(method, productID string, options ...HeadOption) X {
 type Config struct {
 	MID      string // 商户ID
 	KeyFile  string // 商户私钥（PEM格式）
-	KeyMode  RSAPaddingMode
+	KeyMode  util.RSAPaddingMode
 	CertFile string // 杉德公钥（PEM格式）
 }
 
 func NewClient(cfg *Config, options ...ClientOption) (Client, error) {
-	prvKey, err := NewPrivateKeyFromPemFile(cfg.KeyMode, cfg.KeyFile)
+	prvKey, err := util.NewPrivateKeyFromPemFile(cfg.KeyMode, cfg.KeyFile)
 
 	if err != nil {
 		return nil, err
 	}
 
-	pubKey, err := NewPublicKeyFromDerFile(cfg.CertFile)
+	pubKey, err := util.NewPublicKeyFromDerFile(cfg.CertFile)
 
 	if err != nil {
 		return nil, err

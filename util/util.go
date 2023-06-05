@@ -1,4 +1,4 @@
-package sandpay
+package util
 
 import (
 	"bytes"
@@ -15,14 +15,7 @@ import (
 	"strconv"
 )
 
-const OK = "000000"
-
-type X map[string]string
-
-type Data struct {
-	Head X `json:"head"`
-	Body X `json:"body"`
-}
+// TODO: split to more little package
 
 // RSAPaddingMode pem block type which taken from the preamble.
 type RSAPaddingMode int

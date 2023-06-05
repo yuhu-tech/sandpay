@@ -7,3 +7,17 @@
 ```sh
 go get -u github.com/shenghui0779/sandpay
 ```
+
+## 目录分级
+- account: 云账户账户侧
+- acceptance: 云账户受理侧
+
+## 解析pem证书的公钥和私钥
+```shell script
+  openssl pkcs12 -in xxxx.pfx -nodes -out server.pem  #生成为原生格式pem 私钥
+  openssl rsa -in server.pem -out server.key          #生成为rsa格式私钥文件
+  openssl x509 -in server.pem  -out server.crt
+  openssl pkcs12 -in xxxx.pfx -clcerts -nokeys -out key.cert
+  openssl x509 -inform der -in certificate.cer -out certificate.pem # der格式的.cer公钥证书转为pem格式
+```
+
