@@ -10,8 +10,8 @@ import (
 )
 
 func TestMemberStatusQuery(t *testing.T) {
-	mid := `6888805AB0378`
-	keyFile := "../cert/6888805AB0378.pem"
+	mid := `68888XXXXXXXX`
+	keyFile := "../cert/68888XXXXXXXX.pem"
 	keyMode := util.RSA_PKCS8
 	certFile := "../cert/sand.pem"
 	client, err := NewClient(&Config{
@@ -23,14 +23,16 @@ func TestMemberStatusQuery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err.Error())
 	}
-	ctx := context.Background()
-	resp, err := client.MemberStatusQuery(ctx, MemberStatusQueryRequest{
-		// BizUserNo: "123",
-		BizUserNo:       "cl1u3wpjg9dok0770rn8ls0u1",
-		CustomerOrderNo: strconv.Itoa(int(time.Now().Unix())),
+	// ctx := context.Background()
+	form, err := client.Form("sandpay.trade.query", "00000001", X{
+		"orderCode": strconv.Itoa(int(time.Now().Unix())),
 	})
+	if err != nil {
+		t.Fatalf("failed to build form: %v", err.Error())
+	}
+	do, err := client.Do(context.Background(), `https://cashier.sandpay.com.cn/gateway/api/order/query`, form)
 	if err != nil {
 		t.Fatalf("failed to query member status: %v", err.Error())
 	}
-	t.Logf("data: %#v", resp)
+	t.Logf("content: %#v", do)
 }
