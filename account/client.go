@@ -96,12 +96,12 @@ type SandRequest struct {
 
 // SandResponse 杉德接口响应标准结构
 type SandResponse struct {
-	Data        json.RawMessage `json:"data,omitempty"`
-	Sign        string          `json:"sign,omitempty"`
-	EncryptKey  string          `json:"encryptKey,omitempty"`
-	Response    *sandResponse   `json:"response,omitempty"`
-	SignType    string          `json:"signType,omitempty"`
-	EncryptType string          `json:"encryptType,omitempty"`
+	Data        string        `json:"data,omitempty"`
+	Sign        string        `json:"sign,omitempty"`
+	EncryptKey  string        `json:"encryptKey,omitempty"`
+	Response    *sandResponse `json:"response,omitempty"`
+	SignType    string        `json:"signType,omitempty"`
+	EncryptType string        `json:"encryptType,omitempty"`
 }
 
 // sandResponse 结构内 response 字段的标准结构
@@ -322,24 +322,17 @@ func (c *Client) verifyResponse(resp *SandResponse) ([]byte, error) {
 	if resp == nil {
 		return nil, errors.New("response is nil")
 	}
-	sign, err := base64.StdEncoding.DecodeString(resp.Sign)
-	if err != nil {
-		return nil, fmt.Errorf("decode response sign error: %w", err)
-	}
-	if err = c.pubKey.Verify(crypto.SHA1, []byte(resp.Data), sign); err != nil {
-		return nil, fmt.Errorf("verify response sign error: %w", err)
-	}
 
 	encryptKey, err := base64.StdEncoding.DecodeString(resp.EncryptKey)
 	if err != nil {
-		return nil, fmt.Errorf("decode response data error: %w", err)
+		return nil, fmt.Errorf("decode response encrypt key error: %w", err)
 	}
 
 	aesKey, err := c.prvKey.Decrypt(encryptKey)
 	if err != nil {
 		return nil, fmt.Errorf("aesKey response data error: %w", err)
 	}
-	cryptoData, err := base64.StdEncoding.DecodeString(string(resp.Data))
+	cryptoData, err := base64.StdEncoding.DecodeString(resp.Data)
 	if err != nil {
 		return nil, fmt.Errorf("decode response data error: %w", err)
 	}

@@ -78,12 +78,12 @@ func (c *Client) TransactionResultNotify(ctx context.Context, reqData []byte) (*
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode base64 sign: %w", err)
 	}
-	if err := c.pubKey.Verify(crypto.SHA1, stdResp.Data, sig); err != nil {
+	if err := c.pubKey.Verify(crypto.SHA1, []byte(stdResp.Data), sig); err != nil {
 		return nil, fmt.Errorf("failed to verify data: %w", err)
 	}
 
 	var resp TransactionResultNotifyResponse
-	if err := json.Unmarshal(stdResp.Data, &resp); err != nil {
+	if err := json.Unmarshal([]byte(stdResp.Data), &resp); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal data to return value: %w", err)
 	}
 	return &resp, nil
