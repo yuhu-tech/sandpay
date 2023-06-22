@@ -1,16 +1,12 @@
 package account
 
 import (
-	"bytes"
-	"context"
 	"crypto"
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
-	"log"
 	"net"
 	"net/http"
 	"time"
@@ -35,13 +31,11 @@ type Config struct {
 
 func NewClient(cfg *Config, options ...ClientOption) (*Client, error) {
 	prvKey, err := util.NewPrivateKeyFromPemFile(cfg.KeyMode, cfg.KeyFile)
-
 	if err != nil {
 		return nil, err
 	}
 
 	pubKey, err := util.NewPublicKeyFromDerFile(cfg.CertFile)
-
 	if err != nil {
 		return nil, err
 	}
@@ -77,12 +71,6 @@ func NewClient(cfg *Config, options ...ClientOption) (*Client, error) {
 	return c, nil
 }
 
-// MemberInfoQueryRequest 用来构建 开户信息查询 接口的请求参数
-type MemberInfoQueryRequest struct {
-	BizUserNo       string `json:"bizUserNo"`
-	CustomerOrderNo string `json:"customerOrderNo"`
-}
-
 // SandRequest 表示标准杉德请求体
 type SandRequest struct {
 	Data            string `json:"data"`
@@ -114,170 +102,6 @@ type sandResponse struct {
 	CustomerOrderNo string `json:"customerOrderNo"`
 	Version         string `json:"version"`
 	ResponseCode    string `json:"responseCode"`
-}
-
-// MemberStatusQueryRequest 用来构建 会员状态查询 的请求参数
-type MemberStatusQueryRequest struct {
-	BizUserNo       string `json:"bizUserNo"`
-	CustomerOrderNo string `json:"customerOrderNo"`
-}
-
-// MemberStatusQueryResponse 会员状态查询 响应参数
-// UNUSED: 杉德响应的参数没有按照文档上来,该接口并没有返回这些参数
-type MemberStatusQueryResponse struct {
-	// BizUserNo 会员编号
-	BizUserNo string `json:"bizUserNo" json:"bizUserNo"`
-	// MemberStatus 会员状态, 00:正常 01:冻结 02:未激活 09:销户 11:风控冻结
-	MemberStatus string `json:"memberStatus"`
-
-	// MemberRegisterDate 会员注册日期 yyyyMMdd
-	MemberRegisterDate string `json:"memberRegisterDate"`
-
-	// MemberLevel 会员等级 00:普通用户 01:一类账户 02:二类账户 03:三类账户
-	MemberLevel string `json:"memberLevel"`
-
-	// PasswordSetupStatus 密码设置状态 00:未设置 01:已设置
-	PasswordSetupStatus string `json:"passwordSetupStatus"`
-
-	// FaceStatus 人脸识别状态 01:已识别 00:未识别
-	FaceStatus string `json:"faceStatus"`
-
-	// UploadStatus 证件影像上传状态 01:已上传 00:未上传
-	UploadStatus string `json:"uploadStatus"`
-
-	// CloseAccountInfo 销户域
-	CloseAccountInfo string `json:"closeAccountInfo"`
-
-	// CloseAccountTime 销户时间 yyyyMMddHHmmss
-	CloseAccountTime string `json:"closeAccountTime"`
-
-	// Remark 销户备注, 用户销户时填写的备注
-	Remark string `json:"remark"`
-}
-
-// MemberStatusQuery 会员状态查询
-// doc: https://open.sandpay.com.cn/product/detail/44241/44246/44407
-func (c *Client) MemberStatusQuery(ctx context.Context, req MemberStatusQueryRequest) (*sandResponse, error) {
-	jsonBody, err := c.buildRequestBody(req.CustomerOrderNo, req)
-	if err != nil {
-		return nil, fmt.Errorf("builld request body failed: %w", err)
-	}
-	// UAT: http://ceas-uat01.sand.com.cn/v4/elecaccount/ceas.elec.member.status.query
-	URL := `https://cap.sandpay.com.cn/v4/elecaccount/ceas.elec.member.status.query`
-
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, URL, bytes.NewReader(jsonBody))
-	if err != nil {
-		return nil, fmt.Errorf("failed to new request: %w", err)
-	}
-	request.Header.Set("Content-Type", "application/json")
-	resp, err := c.cli.Do(request)
-	if err != nil {
-		return nil, fmt.Errorf("send request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	curResp := &sandResponse{}
-	stdResp := &SandResponse{
-		Response: curResp,
-	}
-	if err = json.Unmarshal(body, stdResp); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal response body: %w", err)
-	}
-	if _, err = c.verifyResponse(stdResp); err != nil {
-		return nil, fmt.Errorf("failed to verify response: %w", err)
-	}
-
-	return curResp, nil
-}
-
-// TransactionInfoQueryRequest 用来构建 交易订单查询 的请求参数
-type TransactionInfoQueryRequest struct {
-	// Mid 商户号, 杉德支付分配给接入商户的商户编号
-	Mid string `json:"mid"`
-	// CustomerOrderNo 商户订单号, 商户号下每次请求的唯一流水号
-	CustomerOrderNo string `json:"customerOrderNo"`
-	// OriCustomerOrderNo 原交易订单号
-	OriCustomerOrderNo string `json:"oriCustomerOrderNo"`
-	// OriPayeeCustomerOrderNo 原交易子订单号(非必填)
-	OriPayeeCustomerOrderNo string `json:"oriPayeeCustomerOrderNo,omitempty"`
-}
-
-type TransactionInfoQueryResponse struct {
-	// OriCustomerOrderNo 原付款申请订单号
-	OriCustomerOrderNo string `json:"oriCustomerOrderNo"`
-	// OriPayeeCustomerOrderNo 原收款子订单号
-	OriPayeeCustomerOrderNo string `json:"oriPayeeCustomerOrderNo,omitempty"`
-	// OrderAmt 订单金额
-	OrderAmt float64 `json:"orderAmt"`
-	// FeeAmt 手续费
-	FeeAmt float64 `json:"feeAmt"`
-	// OrderStatus 订单状态
-	OrderStatus string `json:"orderStatus"`
-	// AuthWay 鉴权方式
-	AuthWay string `json:"authWay"`
-	// Remark 备注
-	Remark string `json:"remark,omitempty"`
-	// GuaranteeStatus 担保状态
-	GuaranteeStatus string `json:"guaranteeStatus,omitempty"`
-	// RefundStatus 退货状态
-	RefundStatus string `json:"refundStatus,omitempty"`
-	// WithdrawStatus 提现状态
-	WithdrawStatus string `json:"withdrawStatus,omitempty"`
-	// FailureMsgs 交易失败原因
-	FailureMsgs string `json:"failureMsgs,omitempty"`
-	// DelayReceivedTime 预计到账时间
-	DelayReceivedTime string `json:"delayReceivedTime,omitempty"`
-}
-
-// TransactionInfoQuery 交易订单查询
-// doc: https://open.sandpay.com.cn/product/detail/44241/44373/44415
-func (c *Client) TransactionInfoQuery(ctx context.Context, req TransactionInfoQueryRequest) (*TransactionInfoQueryResponse, error) {
-	jsonBody, err := c.buildRequestBody(req.CustomerOrderNo, req)
-	if err != nil {
-		return nil, fmt.Errorf("builld request body failed: %w", err)
-	}
-	// UAT: https://ceas-uat01.sand.com.cn/v4/electrans/ceas.elec.trans.info.query
-	URL := `https://cap.sandpay.com.cn/v4/electrans/ceas.elec.trans.info.query`
-
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, URL, bytes.NewReader(jsonBody))
-	if err != nil {
-		return nil, fmt.Errorf("failed to new request: %w", err)
-	}
-	request.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.cli.Do(request)
-	if err != nil {
-		return nil, fmt.Errorf("send request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	curResp := &sandResponse{}
-	stdResp := &SandResponse{
-		Response: curResp,
-	}
-	log.Printf("body: %s", body)
-	if err = json.Unmarshal(body, stdResp); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal response body: %w", err)
-	}
-	data, err := c.verifyResponse(stdResp)
-	if err != nil {
-		return nil, fmt.Errorf("failed to verify response: %w", err)
-	}
-	var realData TransactionInfoQueryResponse
-	if err := json.Unmarshal(data, &realData); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal response body: %w", err)
-	}
-	return &realData, nil
 }
 
 func (c *Client) buildRequestBody(orderNo string, req interface{}) ([]byte, error) {
@@ -332,6 +156,7 @@ func (c *Client) verifyResponse(resp *SandResponse) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("aesKey response data error: %w", err)
 	}
+
 	cryptoData, err := base64.StdEncoding.DecodeString(resp.Data)
 	if err != nil {
 		return nil, fmt.Errorf("decode response data error: %w", err)

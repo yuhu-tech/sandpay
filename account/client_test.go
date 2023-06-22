@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/big"
 	"strconv"
 	"testing"
 	"time"
@@ -87,7 +88,7 @@ func TestResponse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get client: %v", err.Error())
 	}
-	reqData := []byte(`{"charset":"UTF-8","data":"{\"amount\":0.18,\"feeAmt\":0,\"mid\":\"6888805120378\",\"orderNo\":\"466081972800778249\",\"orderStatus\":\"00\",\"payeeList\":[{\"bizUserNo\":\"6888805120378\",\"payeeAmt\":0.01,\"payeeCustomerOrderNo\":\"466081972800778249-2\",\"remark\":\"订单[466081972800778249]交易手续费\",\"sandSerialNo\":\"CEAS2023062110010000371350\"},{\"bizUserNo\":\"cl1u3wpjg9dok0770rn8ls0u1\",\"payeeAmt\":0.17,\"payeeCustomerOrderNo\":\"466081972800778249-1\",\"remark\":\"Frog_#5收入\",\"sandSerialNo\":\"CEAS2023062110010000371351\"}],\"payerInfo\":{\"payerAccName\":\"陈清\",\"payerAccNo\":\"200841000020004\",\"payerMemID\":\"ckp4vydancim10762jrxjpzf7\"},\"respCode\":\"00000\",\"respMsg\":\"成功\",\"respTime\":\"20230621162845\",\"sandSerialNo\":\"CEAS23062115140702100000135300\",\"transType\":\"PAYMENT\",\"userFeeAmt\":0}","extend":"","sign":"VX5l8PiawO15KTquviINzlMpaLNuJxNom7865XkcMm9lKWmEbm8eKGkjULK5w955aRYdP7kPSghF83NqwppWN7gpIIw8uZ2znj1cUmZfsc7icA1iMmxk3SOB49fSXLfrV5mmQspU2u6v+UlcoZDwOSjt4Z4vTP2OJFsZdfWWY08xdheU+KO7sjh5lph74W4n4FiOpbzsqPT/zIvkcYS5W6dbiwiA+iwGGbcSC6ZQ7jGgWowhVIP/TZHKu4X6Iyzh/Cyrt9un4wmh97hAn/O+hdLqB9zl/PcQSecZ9mb78TnpcwkSCt/7l/6IMimYt31L9t5zOcgzbfviNrOi8vMeaw==","signType":"SHA1WithRSA"}`)
+	reqData := []byte(`{"charset":"UTF-8","data":"{\"amount\":0.18,\"feeAmt\":0,\"mid\":\"68888XXXXXXXX\",\"orderNo\":\"466081972800778249\",\"orderStatus\":\"00\",\"payeeList\":[{\"bizUserNo\":\"68888XXXXXXXX\",\"payeeAmt\":0.01,\"payeeCustomerOrderNo\":\"466081972800778249-2\",\"remark\":\"订单[466081972800778249]交易手续费\",\"sandSerialNo\":\"CEAS2023062110010000371350\"},{\"bizUserNo\":\"cl1u3wpjg9dok0770rn8ls0u1\",\"payeeAmt\":0.17,\"payeeCustomerOrderNo\":\"466081972800778249-1\",\"remark\":\"Frog_#5收入\",\"sandSerialNo\":\"CEAS2023062110010000371351\"}],\"payerInfo\":{\"payerAccName\":\"陈清\",\"payerAccNo\":\"200841000020004\",\"payerMemID\":\"ckp4vydancim10762jrxjpzf7\"},\"respCode\":\"00000\",\"respMsg\":\"成功\",\"respTime\":\"20230621162845\",\"sandSerialNo\":\"CEAS23062115140702100000135300\",\"transType\":\"PAYMENT\",\"userFeeAmt\":0}","extend":"","sign":"VX5l8PiawO15KTquviINzlMpaLNuJxNom7865XkcMm9lKWmEbm8eKGkjULK5w955aRYdP7kPSghF83NqwppWN7gpIIw8uZ2znj1cUmZfsc7icA1iMmxk3SOB49fSXLfrV5mmQspU2u6v+UlcoZDwOSjt4Z4vTP2OJFsZdfWWY08xdheU+KO7sjh5lph74W4n4FiOpbzsqPT/zIvkcYS5W6dbiwiA+iwGGbcSC6ZQ7jGgWowhVIP/TZHKu4X6Iyzh/Cyrt9un4wmh97hAn/O+hdLqB9zl/PcQSecZ9mb78TnpcwkSCt/7l/6IMimYt31L9t5zOcgzbfviNrOi8vMeaw==","signType":"SHA1WithRSA"}`)
 	ctx := context.TODO()
 	res, err := client.TransactionResultNotify(ctx, reqData)
 	if err != nil {
@@ -102,10 +103,29 @@ func TestTransactionResultNotify(t *testing.T) {
 		t.Fatalf("failed to create client: %v", err.Error())
 	}
 	ctx := context.Background()
-	data := `{"charset":"UTF-8","data":"{\"amount\":0.18,\"feeAmt\":0,\"mid\":\"6888805120378\",\"orderNo\":\"466081972800778249\",\"orderStatus\":\"00\",\"payeeList\":[{\"bizUserNo\":\"6888805120378\",\"payeeAmt\":0.01,\"payeeCustomerOrderNo\":\"466081972800778249-2\",\"remark\":\"订单[466081972800778249]交易手续费\",\"sandSerialNo\":\"CEAS2023062110010000371350\"},{\"bizUserNo\":\"cl1u3wpjg9dok0770rn8ls0u1\",\"payeeAmt\":0.17,\"payeeCustomerOrderNo\":\"466081972800778249-1\",\"remark\":\"Frog_#5收入\",\"sandSerialNo\":\"CEAS2023062110010000371351\"}],\"payerInfo\":{\"payerAccName\":\"陈清\",\"payerAccNo\":\"200841000020004\",\"payerMemID\":\"ckp4vydancim10762jrxjpzf7\"},\"respCode\":\"00000\",\"respMsg\":\"成功\",\"respTime\":\"20230621162845\",\"sandSerialNo\":\"CEAS23062115140702100000135300\",\"transType\":\"PAYMENT\",\"userFeeAmt\":0}","extend":"","sign":"VX5l8PiawO15KTquviINzlMpaLNuJxNom7865XkcMm9lKWmEbm8eKGkjULK5w955aRYdP7kPSghF83NqwppWN7gpIIw8uZ2znj1cUmZfsc7icA1iMmxk3SOB49fSXLfrV5mmQspU2u6v+UlcoZDwOSjt4Z4vTP2OJFsZdfWWY08xdheU+KO7sjh5lph74W4n4FiOpbzsqPT/zIvkcYS5W6dbiwiA+iwGGbcSC6ZQ7jGgWowhVIP/TZHKu4X6Iyzh/Cyrt9un4wmh97hAn/O+hdLqB9zl/PcQSecZ9mb78TnpcwkSCt/7l/6IMimYt31L9t5zOcgzbfviNrOi8vMeaw==","signType":"SHA1WithRSA"}`
+	data := `{"charset":"UTF-8","data":"{\"amount\":0.18,\"feeAmt\":0,\"mid\":\"68888XXXXXXXX\",\"orderNo\":\"466081972800778249\",\"orderStatus\":\"00\",\"payeeList\":[{\"bizUserNo\":\"68888XXXXXXXX\",\"payeeAmt\":0.01,\"payeeCustomerOrderNo\":\"466081972800778249-2\",\"remark\":\"订单[466081972800778249]交易手续费\",\"sandSerialNo\":\"CEAS2023062110010000371350\"},{\"bizUserNo\":\"cl1u3wpjg9dok0770rn8ls0u1\",\"payeeAmt\":0.17,\"payeeCustomerOrderNo\":\"466081972800778249-1\",\"remark\":\"Frog_#5收入\",\"sandSerialNo\":\"CEAS2023062110010000371351\"}],\"payerInfo\":{\"payerAccName\":\"陈清\",\"payerAccNo\":\"200841000020004\",\"payerMemID\":\"ckp4vydancim10762jrxjpzf7\"},\"respCode\":\"00000\",\"respMsg\":\"成功\",\"respTime\":\"20230621162845\",\"sandSerialNo\":\"CEAS23062115140702100000135300\",\"transType\":\"PAYMENT\",\"userFeeAmt\":0}","extend":"","sign":"VX5l8PiawO15KTquviINzlMpaLNuJxNom7865XkcMm9lKWmEbm8eKGkjULK5w955aRYdP7kPSghF83NqwppWN7gpIIw8uZ2znj1cUmZfsc7icA1iMmxk3SOB49fSXLfrV5mmQspU2u6v+UlcoZDwOSjt4Z4vTP2OJFsZdfWWY08xdheU+KO7sjh5lph74W4n4FiOpbzsqPT/zIvkcYS5W6dbiwiA+iwGGbcSC6ZQ7jGgWowhVIP/TZHKu4X6Iyzh/Cyrt9un4wmh97hAn/O+hdLqB9zl/PcQSecZ9mb78TnpcwkSCt/7l/6IMimYt31L9t5zOcgzbfviNrOi8vMeaw==","signType":"SHA1WithRSA"}`
 	resp, err := client.TransactionResultNotify(ctx, []byte(data))
 	if err != nil {
 		t.Fatalf("failed to query member status: %v", err.Error())
 	}
 	t.Logf("data: %#v", resp)
+}
+
+func TestTransactionGuaranteeConfirm(t *testing.T) {
+	client, err := getTestClient()
+	if err != nil {
+		t.Fatalf("failed to create client: %v", err.Error())
+	}
+	ctx := context.Background()
+	_, err = client.TransactionGuaranteeConfirm(ctx, TransactionGuaranteeConfirmRequest{
+		OriCustomerOrderNo: "466218087192985609",
+		Mid:                "68888XXXXXXXX",
+		CustomerOrderNo:    fmt.Sprintf("%v", time.Now().Unix()),
+		OriOrderAmt:        new(big.Float).SetFloat64(0.16),
+		OperationType:      "GUARANTEE_CONFIRM",
+	})
+	if err != nil {
+		t.Fatalf("confirm guarantee failed: %v", err.Error())
+	}
+
 }
