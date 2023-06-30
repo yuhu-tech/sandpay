@@ -131,7 +131,7 @@ func (c *Client) TransactionGuaranteeConfirm(ctx context.Context, req Transactio
 	if err != nil {
 		return nil, fmt.Errorf("builld request body failed: %w", err)
 	}
-	fmt.Printf("body: %s\n", jsonBody)
+
 	// 测试环境：https://ceas-uat01.sand.com.cn/v4/electrans/ceas.elec.trans.guarantee.confirm
 	URL := `https://cap.sandpay.com.cn/v4/electrans/ceas.elec.trans.guarantee.confirm`
 

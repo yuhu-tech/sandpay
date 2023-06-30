@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"math/big"
 	"net/http"
 )
 
@@ -88,4 +89,102 @@ func (c *Client) MemberStatusQuery(ctx context.Context, req MemberStatusQueryReq
 	}
 
 	return curResp, nil
+}
+
+// AccountBalanceQueryRequest 查询账户余额 的请求参数
+type AccountBalanceQueryRequest struct {
+	// BizUserNo 会员编号, 杉德系统中该商户下用户唯一编号
+	BizUserNo string `json:"bizUserNo"`
+
+	// AccountType 账户类型
+	// 01: 电子支付户
+	// 02: 权益账户
+	// 03: 奖励金户
+	AccountType string `json:"accountType,omitempty"`
+
+	CustomerOrderNo string `json:"customerOrderNo"`
+}
+
+// AccountBalanceQueryResponse 查询账户余额 响应参数
+type AccountBalanceQueryResponse struct {
+	// Mid 商户号, 杉德支付分配给接入商户的商户编号
+	Mid string `json:"mid"`
+
+	// CustomerOrderNo 商户订单号,商户号下每次请求的唯一流水号
+	CustomerOrderNo string `json:"customerOrderNo"`
+
+	// BizUserNo 会员编号, 杉德系统中该商户下用户唯一编号
+	BizUserNo string `json:"bizUserNo"`
+
+	// AccountList 账户信息结果
+	AccountList []accountBalanceQueryResponseAccountListItem `json:"accountList"`
+}
+
+type accountBalanceQueryResponseAccountListItem struct {
+	// AccountName 账户名称
+	AccountName string `json:"accountName"`
+
+	// AccountType 账户类型
+	// 01: 支付电子户
+	// 02: 权益账户
+	// 03: 奖励金户
+	AccountType string `json:"accountType"`
+
+	// AvailableBal 可用金额
+	AvailableBal *big.Float `json:"availableBal,omitempty"`
+
+	// FrozenBal 冻结金额
+	FrozenBal *big.Float `json:"frozenBal,omitempty"`
+
+	// AccountStatus 账户状态
+	// 00: 正常
+	// 01: 冻结
+	// 09: 销户
+	AccountStatus string `json:"accountStatus,omitempty"`
+}
+
+// AccountBalanceQuery 个人账户余额查询
+// doc: https://open.sandpay.com.cn/product/detail/44241/44246/44256
+func (c *Client) AccountBalanceQuery(ctx context.Context, req AccountBalanceQueryRequest) (*AccountBalanceQueryResponse, error) {
+	jsonBody, err := c.buildRequestBody(req.CustomerOrderNo, req)
+	if err != nil {
+		return nil, fmt.Errorf("builld request body failed: %w", err)
+	}
+
+	// 测试环境: https://ceas-uat01.sand.com.cn/v4/elecaccount/ceas.elec.account.balance.query
+	URL := `https://cap.sandpay.com.cn/v4/elecaccount/ceas.elec.account.balance.query`
+
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, URL, bytes.NewReader(jsonBody))
+	if err != nil {
+		return nil, fmt.Errorf("failed to new request: %w", err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	resp, err := c.cli.Do(request)
+	if err != nil {
+		return nil, fmt.Errorf("send request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	curResp := &sandResponse{}
+	stdResp := &SandResponse{
+		Response: curResp,
+	}
+	if err = json.Unmarshal(body, stdResp); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response body: %w", err)
+	}
+	data, err := c.verifyResponse(stdResp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to verify response: %w", err)
+	}
+
+	var realData AccountBalanceQueryResponse
+	if err := json.Unmarshal(data, &realData); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response body: %w", err)
+	}
+	return &realData, nil
 }
